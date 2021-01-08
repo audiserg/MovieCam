@@ -3,21 +3,27 @@ package com.example.moviecam
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.hardware.camera2.*
+import android.media.CamcorderProfile
 import android.media.MediaCodec
 import android.media.MediaRecorder
 import android.media.MediaScannerConnection
+import android.media.MediaScannerConnection.MediaScannerConnectionClient
+import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import android.os.Handler
 import android.os.HandlerThread
+import android.provider.MediaStore
 import android.util.Log
 import android.util.Range
 import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
@@ -34,6 +40,7 @@ import java.util.*
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
+
 
 private const val PERMISSIONS_REQUEST_CODE = 10
 
@@ -64,7 +71,7 @@ class MainActivity : AppCompatActivity() {
     private val cameraThread = HandlerThread("CameraThread").apply { start() }
     private val cameraHandler = Handler(cameraThread.looper)
     private val cameraParams: CameraHelper.Companion.CameraInfo by lazy {
-        CameraHelper.getCameraConfigs( cameraManager )
+        CameraHelper.getCameraConfigs(cameraManager)
     }
     private lateinit var viewFinder: SurfaceView
     private lateinit var session: CameraCaptureSession
@@ -149,6 +156,7 @@ class MainActivity : AppCompatActivity() {
                 Statuses.RecStopped -> {
                     binding.tvStatusText.text = "${status.getText()} ${outputFile.name}"
                     binding.btStart.isEnabled = true
+                    notifyAndroid(outputFile)
                     binding.btStop.isEnabled = false
 
                 }
@@ -161,6 +169,24 @@ class MainActivity : AppCompatActivity() {
 
     }
 
+
+    private fun notifyAndroid(file: File){
+//        sendBroadcast(
+//            Intent(
+//                Intent.ACTION_MEDIA_SCANNER_SCAN_FILE,
+//                Uri.parse("file://" + file.getAbsolutePath())
+//            )
+//        )
+
+        MediaScannerConnection.scanFile(
+            this, arrayOf(file.absolutePath), null
+        ) { path, uri ->
+
+            Log.d(">>","row: $uri")
+            //....
+        }
+
+    }
     private fun initViewSurface() {
         viewFinder = binding.previewFrame
         outputFile = createFile(this.applicationContext, "mp4")
@@ -206,17 +232,20 @@ class MainActivity : AppCompatActivity() {
     private fun createRecorder(surface: Surface) = MediaRecorder().apply {
         setAudioSource(MediaRecorder.AudioSource.MIC)
         setVideoSource(MediaRecorder.VideoSource.SURFACE)
+        val safeParametrs=CamcorderProfile.get(CamcorderProfile.QUALITY_HIGH)
         setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
         setOutputFile(outputFile.absolutePath)
         setVideoEncodingBitRate(RECORDER_VIDEO_BITRATE)
         if (cameraParams.fps > 0) setVideoFrameRate(cameraParams.fps)
-        setVideoSize(cameraParams.size.width, cameraParams.size.height)
+       // setVideoSize(cameraParams.size.width, cameraParams.size.height)
+        setVideoSize(safeParametrs.videoFrameWidth, safeParametrs.videoFrameHeight)
         setVideoEncoder(MediaRecorder.VideoEncoder.H264)
         setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+       // setPreviewDisplay(surface)
         setInputSurface(surface)
     }
 
-    private fun preparerequest():CaptureRequest{
+    private fun prepareRecordRequest():CaptureRequest{
         return session.device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
             addTarget(viewFinder.holder.surface)
             addTarget(recorderSurface)
@@ -268,9 +297,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private suspend fun initRecord() {
-        val targets = listOf(viewFinder.holder.surface, recorderSurface)
+        val targets = listOf(recorderSurface, viewFinder.holder.surface)
         session = createCaptureSession(camera, targets, cameraHandler)
-        recordRequest = preparerequest()
+        recordRequest = prepareRecordRequest()
         session.setRepeatingRequest(recordRequest, null, cameraHandler)
     }
 
@@ -339,7 +368,7 @@ class MainActivity : AppCompatActivity() {
             val sdf = SimpleDateFormat("HH:mm:ss dd-MM-yyyy", Locale.getDefault())
             return File(
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM).absolutePath,
-                "VID_${sdf.format(Date())}.$extension"
+                "MOVIE_${sdf.format(Date())}.$extension"
             )
         }
     }

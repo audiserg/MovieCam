@@ -5,10 +5,11 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.ImageDecoder
 import android.graphics.ImageFormat
+import android.graphics.PixelFormat
 import android.graphics.Point
-import android.hardware.Camera
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
+import android.hardware.camera2.params.RecommendedStreamConfigurationMap
 import android.hardware.camera2.params.StreamConfigurationMap
 import android.media.MediaMuxer
 import android.media.MediaRecorder
@@ -54,17 +55,13 @@ class CameraHelper {
                 if (capabilities.contains(
                         CameraCharacteristics
                         .REQUEST_AVAILABLE_CAPABILITIES_BACKWARD_COMPATIBLE)) {
-                    // Recording should always be done in the most efficient format, which is
-                    //  the format native to the camera framework
                     val targetClass = MediaRecorder::class.java
+                    val sizes=cameraConfig.getOutputSizes(targetClass)
+                        sizes.forEach { size ->
 
-                    // For each size, list the expected FPS
-                    cameraConfig.getOutputSizes(targetClass).forEach { size ->
-                        // Get the number of seconds that each frame will take to process
                         val secondsPerFrame =
                             cameraConfig.getOutputMinFrameDuration(targetClass, size) /
                                     1_000_000_000.0
-                        // Compute the frames per second to let user select a configuration
                         val fps = if (secondsPerFrame > 0) (1.0 / secondsPerFrame).toInt() else 0
                         val fpsLabel = if (fps > 0) "$fps" else "N/A"
                         availableCameras.add(CameraInfo(
@@ -73,7 +70,7 @@ class CameraHelper {
                 }
             }
 
-            return availableCameras.get(0)
+            return availableCameras.get(3)
         }
 
         class SmartSize(width: Int, height: Int) {
@@ -98,7 +95,6 @@ class CameraHelper {
             format: Int? = null
         ): Size {
 
-            // Find which is smaller: screen or 1080p
             val screenSize = getDisplaySmartSize(display)
             val hdScreen = screenSize.long >= SIZE_1080P.long || screenSize.short >= SIZE_1080P.short
             val maxSize = if (hdScreen) SIZE_1080P else screenSize
@@ -113,12 +109,10 @@ class CameraHelper {
             val allSizes = if (format == null)
                 config.getOutputSizes(targetClass) else config.getOutputSizes(format)
 
-            // Get available sizes and sort them by area from largest to smallest
             val validSizes = allSizes
                 .sortedWith(compareBy { it.height * it.width })
                 .map { SmartSize(it.width, it.height) }.reversed()
 
-            // Then, get the largest output size that is smaller or equal than our max size
             return validSizes.first { it.long <= maxSize.long && it.short <= maxSize.short }.size
         }
 
