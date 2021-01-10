@@ -10,20 +10,16 @@ import android.media.CamcorderProfile
 import android.media.MediaCodec
 import android.media.MediaRecorder
 import android.media.MediaScannerConnection
-import android.media.MediaScannerConnection.MediaScannerConnectionClient
-import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import android.os.Handler
 import android.os.HandlerThread
-import android.provider.MediaStore
 import android.util.Log
 import android.util.Range
 import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
@@ -179,10 +175,9 @@ class MainActivity : AppCompatActivity() {
 //        )
 
         MediaScannerConnection.scanFile(
-            this, arrayOf(file.absolutePath), null
+            this, arrayOf(file.absolutePath), arrayOf("video/mp4")
         ) { path, uri ->
-
-            Log.d(">>","row: $uri")
+            Log.d(">>", "path{$path} added media to row: $uri")
             //....
         }
 
@@ -258,9 +253,9 @@ class MainActivity : AppCompatActivity() {
     private fun initializeCamera() = viewModel.viewModelScope.launch(Dispatchers.Main) {
         camera = openCamera(cameraManager, cameraParams.cameraId, cameraHandler)
         setupPreviewSession()
-        setupMediaRecorder()
         binding.btStart.setOnClickListener { view ->
             outputFile = createFile(this@MainActivity.baseContext, "mp4")
+            setupMediaRecorder()
             viewModel.viewModelScope.launch(Dispatchers.IO) {
                 initRecord()
                 recorder.apply {
@@ -282,10 +277,8 @@ class MainActivity : AppCompatActivity() {
                   session.close()
                     recorder.stop()
                    recorder.release()
-                setupMediaRecorder()
-                MediaScannerConnection.scanFile(
-                    view.context, arrayOf(outputFile.absolutePath), null, null
-                )
+               // setupMediaRecorder()
+
                 withContext(Dispatchers.Main) {
                     viewModel.status.value = Statuses.RecStopped
                     setupPreviewSession()
@@ -364,9 +357,11 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val RECORDER_VIDEO_BITRATE: Int = 10_000_000
+
         private fun createFile(context: Context, extension: String): File {
             val sdf = SimpleDateFormat("HH:mm:ss dd-MM-yyyy", Locale.getDefault())
             return File(
+                //context.filesDir,
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM).absolutePath,
                 "MOVIE_${sdf.format(Date())}.$extension"
             )
